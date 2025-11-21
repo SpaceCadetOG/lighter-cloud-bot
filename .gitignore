@@ -2,3 +2,4 @@ node_modules/
 frontend/.next/
 frontend/.env*
 backend/bin/
+.env
