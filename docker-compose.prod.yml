@@ -1,0 +1,39 @@
+# docker-compose.prod.yml
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lighter-backend
+    env_file:
+      - ./backend/.env
+    environment:
+      # make sure backend knows it's prod if you branch on this later
+      - APP_ENV=prod
+      # optional: reduce rate-limit hits by slowing polling
+      - POLL_INTERVAL_MS=2500
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # baked into Next build
+        NEXT_PUBLIC_API_BASE: "http://localhost:8080"
+    container_name: lighter-frontend
+    environment:
+      # runtime env (also available client-side)
+      - NEXT_PUBLIC_API_BASE=http://localhost:8080
+      - NODE_ENV=production
+      # if you want to slow frontend refresh too
+      - NEXT_PUBLIC_POLL_INTERVAL_MS=2500
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
