@@ -34,14 +34,14 @@ type PositionRow struct {
 
 type AccountSummary struct {
 	AccountID          string  `json:"account_id"`
-	BalanceUsd         float64 `json:"balance_usd"`           // sum of collateral across all subaccts
-	EquityUsd          float64 `json:"equity_usd"`            // balance + unrealized (for now same)
-	UnrealizedPnlUsd   float64 `json:"unrealized_pnl_usd"`    // TODO: aggregate from positions
-	RealizedPnlUsd     float64 `json:"realized_pnl_usd"`      // TODO: from PnL history
-	MarginUsedUsd      float64 `json:"margin_used_usd"`       // ∑ allocated_margin (later)
-	MarginAvailableUsd float64 `json:"margin_available_usd"`  // equity - margin_used
-	EffectiveLeverage  float64 `json:"effective_leverage"`    // equity / margin_used
-	Sharpe30d          float64 `json:"sharpe_30d"`            // placeholder
+	BalanceUsd         float64 `json:"balance_usd"`          // sum of collateral across all subaccts
+	EquityUsd          float64 `json:"equity_usd"`           // balance + unrealized (for now same)
+	UnrealizedPnlUsd   float64 `json:"unrealized_pnl_usd"`   // TODO: aggregate from positions
+	RealizedPnlUsd     float64 `json:"realized_pnl_usd"`     // TODO: from PnL history
+	MarginUsedUsd      float64 `json:"margin_used_usd"`      // ∑ allocated_margin (later)
+	MarginAvailableUsd float64 `json:"margin_available_usd"` // equity - margin_used
+	EffectiveLeverage  float64 `json:"effective_leverage"`   // equity / margin_used
+	Sharpe30d          float64 `json:"sharpe_30d"`           // placeholder
 }
 
 type OrderRow struct {
@@ -317,11 +317,11 @@ func handleTradeOrder(lc *internal.LighterClient) http.HandlerFunc {
 		// add to in-memory order log so the UI can see "Working & Recent Orders"
 		orderLogMu.Lock()
 		orderLog = append(orderLog, OrderRow{
-			OrderID:        devOrderID,
-			Symbol:         req.Symbol,
-			Side:           req.Side,
-			Type:           req.Type,
-			Status:         "open",
+			OrderID: devOrderID,
+			Symbol:  req.Symbol,
+			Side:    req.Side,
+			Type:    req.Type,
+			Status:  "open",
 			Price: func() float64 {
 				if req.Price != nil {
 					return *req.Price
@@ -606,7 +606,11 @@ func main() {
 
 	handler := withCORS(mux)
 
-	addr := ":8080"
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	addr := ":" + port
 	log.Printf("Starting backend on %s\n", addr)
 	log.Fatal(http.ListenAndServe(addr, handler))
 }
