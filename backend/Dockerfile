@@ -1,28 +1,20 @@
 # backend/Dockerfile
-# ---- build stage ----
-FROM golang:1.22-bookworm AS builder
 
+FROM golang:1.22-bookworm AS builder
 WORKDIR /app
 
-# cache deps
 COPY go.mod go.sum ./
 RUN go mod download
 
-# copy source
 COPY . .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o server ./cmd/api
 
-# build binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -o /lighter-api ./cmd/api
-
-# ---- runtime stage ----
-FROM gcr.io/distroless/base-debian12
-
+FROM gcr.io/distroless/base-debian12:latest
 WORKDIR /app
+COPY --from=builder /app/server ./server
 
-COPY --from=builder /lighter-api /app/lighter-api
-
+ENV PORT=8080
 EXPOSE 8080
 
-# distroless has no shell; just run the binary
-ENTRYPOINT ["/app/lighter-api"]
+USER nonroot:nonroot
+ENTRYPOINT ["./server"]

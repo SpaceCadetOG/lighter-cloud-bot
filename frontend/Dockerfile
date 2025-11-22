@@ -1,40 +1,46 @@
 # frontend/Dockerfile
-# ---- deps ----
+
+# ---------- deps ----------
 FROM node:20-bookworm AS deps
 WORKDIR /app
 
+# Install deps based on lockfile
 COPY package.json package-lock.json* pnpm-lock.yaml* yarn.lock* ./
 RUN \
   if [ -f package-lock.json ]; then npm ci; \
   elif [ -f pnpm-lock.yaml ]; then corepack enable && pnpm i --frozen-lockfile; \
-  elif [ -f yarn.lock ]; then yarn --frozen-lockfile; \
-  else npm i; fi
+  elif [ -f yarn.lock ]; then yarn install --frozen-lockfile; \
+  else npm install; \
+  fi
 
-# ---- build ----
+# ---------- builder ----------
 FROM node:20-bookworm AS builder
 WORKDIR /app
+
+ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-ARG NEXT_PUBLIC_API_BASE
-ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
-
+# build Next app
 RUN npm run build
 
-# ---- run (standalone) ----
+# ---------- runner ----------
 FROM node:20-bookworm AS runner
 WORKDIR /app
-
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# If you use Next "standalone" output (default on recent Next):
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
+# Copy only what we need to run
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/next.config.* ./ 2>/dev/null || true
+
+# If you *do* have a public folder later, uncomment this line:
+# COPY --from=builder /app/public ./public
 
 EXPOSE 3000
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
 
-CMD ["node", "server.js"]
+CMD ["npm", "run", "start"]

@@ -1,53 +1,52 @@
 #!/bin/bash
 set -euo pipefail
 
-APP_DIR="/opt/lighter"
+APP_DIR="/opt/lighter-cloud-bot"
 REPO_URL="https://github.com/SpaceCadetOG/lighter-cloud-bot.git"
+BRANCH="main"
 
-echo "[1/6] Update + install prerequisites"
+# ---- base packages ----
 apt-get update -y
-apt-get install -y ca-certificates curl gnupg git
+apt-get install -y git curl ca-certificates gnupg
 
-echo "[2/6] Install Docker"
-install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/debian/gpg \
-  | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-chmod a+r /etc/apt/keyrings/docker.gpg
-
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-  https://download.docker.com/linux/debian bookworm stable" \
-  > /etc/apt/sources.list.d/docker.list
-
-apt-get update -y
-apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-systemctl enable docker
-systemctl start docker
-
-echo "[3/6] Install app repo"
-mkdir -p "$APP_DIR"
-if [ ! -d "$APP_DIR/.git" ]; then
-  git clone "$REPO_URL" "$APP_DIR"
-else
-  cd "$APP_DIR"
-  git pull
+# ---- docker install ----
+if ! command -v docker >/dev/null 2>&1; then
+  install -m 0755 -d /etc/apt/keyrings
+  curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  echo \
+    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian bookworm stable" \
+    > /etc/apt/sources.list.d/docker.list
+  apt-get update -y
+  apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  systemctl enable docker
+  systemctl start docker
 fi
 
-echo "[4/6] Ensure backend env exists"
-cd "$APP_DIR"
-if [ ! -f backend/.env ]; then
-  cat > backend/.env <<'EOF'
-# REQUIRED
-LIGHTER_L1_ADDRESS=0xYOURADDRESS
-LIGHTER_API_BASE=https://mainnet.zklighter.elliot.ai/api/v1
+# ---- app user ----
+id -u appuser >/dev/null 2>&1 || useradd -m -s /bin/bash appuser
+usermod -aG docker appuser
 
-# OPTIONAL throttle (ms)
-POLL_INTERVAL_MS=2500
+# ---- clone / update repo ----
+mkdir -p "$APP_DIR"
+if [ ! -d "$APP_DIR/.git" ]; then
+  git clone -b "$BRANCH" "$REPO_URL" "$APP_DIR"
+else
+  cd "$APP_DIR"
+  git fetch origin
+  git reset --hard "origin/$BRANCH"
+fi
+
+cd "$APP_DIR"
+
+# ---- env file (edit after boot if needed) ----
+if [ ! -f backend/.env ]; then
+cat > backend/.env <<'EOF'
+LIGHTER_BASE_URL=https://mainnet.zklighter.elliot.ai
+LIGHTER_L1_ADDRESS=0x4BAa6b3DC50b0cA44B525C06A4B6CB67B87a6Eb1
+PORT=8080
 EOF
 fi
 
-echo "[5/6] Compose up"
+# ---- run compose ----
 docker compose -f docker-compose.prod.yml up -d --build
-
-echo "[6/6] Done. Containers:"
 docker ps
